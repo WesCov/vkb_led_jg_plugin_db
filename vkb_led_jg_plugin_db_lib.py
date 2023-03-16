@@ -114,6 +114,8 @@ class LEDClass:
    always 0 regardless of original setting.  I cannot figure out how to fix it so I am
    getting around the probllem by always adding a dummy lED at the end of the list
    when setting the LEDs and not pulling it from LED report.
+   (The get function not used in the db version.)
+   
 '''
 
 def get_LED_configs(dev):
@@ -174,20 +176,18 @@ class controlStateClass:
     
     def __init__(self,
                  vkbDevice = None,
-                 LED_id = None,
+                 mode = "Default",
+                 changesMode = False,
+                 whilePressed = False,
                  LEDConfig = None,
-                 defaultLED = None,
-                 priorLED = None,
-                 buttonStateOn = False,
-                 whilePressed = False):
+                 defaultLEDConfig = None):
         
         self.vkbDevice = vkbDevice
-        self.LED_id = LED_id
-        self.LEDConfig = LEDConfig
-        self.defaultLED = defaultLED
-        self.priorLED = priorLED
-        self.buttonStateOn = buttonStateOn
+        self.mode = mode
+        self.changesMode = changesMode
         self.whilePressed = whilePressed
+        self.LEDConfig = LEDConfig
+        self.defaultLEDConfig = defaultLEDConfig
 
 
 def LEDNameToId(s):
@@ -216,6 +216,7 @@ def getUSBDevice(vendor_id, product_id):
         return theDevice[0] 
 
 # search the USB lighting report results for a specific LED
+# not used in db version
 def getLEDIndex(LED_id, LEDConfigs):
     i=0
     while i < len(LEDConfigs) and LEDConfigs[i].LED_id != LED_id:
