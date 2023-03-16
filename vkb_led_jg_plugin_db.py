@@ -6,13 +6,15 @@ Joystick Gremlin plugin to control the three LEDs of a VKB Gladiator flightstick
 
 Please see the README file for directions, credits, and limitations.
 
+version with db (event database)
+
 """
 
 import os
 import gremlin
 from gremlin.user_plugin import *
 
-from vkb_led_jg_plugin_lib import *
+from vkb_led_jg_plugin_db_lib import *
 
 
 # hard code the vendor and product ids
@@ -37,11 +39,16 @@ buttonTrigger = PhysicalInputVariable(
 
 mode = ModeVariable("Mode:", "The mode in which to use this mapping")
 
+changesMode = BoolVariable(
+	"Button press changes mode:",
+	"This button has been assigned to change modes.",
+	False)
+
 LEDName = StringVariable("Which LED - Base, Hat, or RGB:", "LED to be activated", "RGB")
 
 whilePressed = BoolVariable(
 	"Only while button is pressed:",
-	"Keep LED activated only while the button is pressed; otherwise toggle on/off with press.",
+	"Keep LED activated only while the button is pressed; otherwise toggle on/off with press. Does not apply to buttons than change modes.",
 	False)
 
 header1 = StringVariable("---------- Base LED Settings ----------","","-------------------------------------")
@@ -115,13 +122,13 @@ else:
 
     # packup the UI inputs into the controlState variable
 
-    controlState.LED_id = LEDNameToId(LEDName.value)
-    controlState.buttonStateOn = False
-    controlState.whilePressed = whilePressed.value    
-    controlState.LEDConfig = LEDClass(LED_id = controlState.LED_id)
+    LED_id = LEDNameToId(LEDName.value)
+    controlState.changesMode = changesmode.value
+    controlState.whilePressed = whilePressed.value
+    controlState.LEDConfig = LEDClass(LED_id = LED_id)
     
     # color1 & color2 have different uses depending on the LED id
-    if controlState.LED_id == 0:        # Base
+    if LED_id == 0:        # Base
         
         controlState.LEDConfig.LEDMode = baseBlinkMode.value 
         if baseBlinkMode.value == 1 and (baseColorMode.value == 3 or baseColorMode.value == 4):
@@ -139,13 +146,13 @@ else:
             controlState.LEDConfig.color1 = [baseBlueBrightness.value, 0, 0]
             controlState.LEDConfig.color2 = [baseRedBrightness.value, 0, 0]
     
-    elif controlState.LED_id == 11:     # Hat    
+    elif LED_id == 11:     # Hat    
         controlState.LEDConfig.LEDMode = hatBlinkMode.value
         controlState.LEDConfig.colorMode = 0 
         controlState.LEDConfig.color1 = [hatRedBrightness.value, 0, 0]
         controlState.LEDConfig.color2 = [0, 0, 0]
     
-    elif controlState.LED_id == 10:     # RGB
+    elif LED_id == 10:     # RGB
         
         controlState.LEDConfig.LEDMode = rgbBlinkMode.value
         controlState.LEDConfig.colorMode = rgbColorMode.value - 1
@@ -153,7 +160,7 @@ else:
         controlState.LEDConfig.color2 = stringRGBToList(rgbStrColor2.value)    
     
     # set up the led configuration to go back to
-    if controlState.LED_id == 10:
+    if LED_id == 10:
         controlState.defaultLED = LEDClass(LED_id = controlState.LED_id,
                                            colorMode = 0,
                                            LEDMode = 1,
@@ -174,46 +181,26 @@ else:
     def button_action(event, vjoy):
         global controlState
 
-        # the USB Lighting Usage report acts as interface between code and LED
-        deviceLEDUsage = get_LED_configs(controlState.vkbDevice)        
-        
-        LEDIndex = getLEDIndex(controlState.LED_id, deviceLEDUsage)
-        if LEDIndex is not None:
-            currentConfig = deviceLEDUsage[LEDIndex]
-        else:
-            currentConfig = None
+        ############ GET THE ON STATE FROM THE STACK
+        buttonStateOn = FALSE
             
-        if event.is_pressed and not controlState.buttonStateOn:
+        if event.is_pressed and not buttonStateOn and not contorlState.changesMode:
 
-            controlState.buttonStateOn = True
-            
-            if controlState.whilePressed:
-                controlState.priorLED = currentConfig
-            else:
-                controlState.priorLED = None
-                
-            if LEDIndex is None:
-                 deviceLEDUsage.append(controlState.LEDConfig)
-            else:
-                deviceLEDUsage[LEDIndex] = controlState.LEDConfig
+                """ PUSH EVENT with event.device_guid, event.identifier,
+                    mode, changesMode, LEDConfig, & defaultLEDConfig
+                """
+                set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
 
-        elif controlState.buttonStateOn:
+        elif ((    buttonStateOn and     event.is_pressed and not controlState.whilePressed) or
+              (    buttonStateOn and not event.is_pressed and     controlState.whilePressed) or
+              (not buttonStateOn and     event.is_pressed and      contorlState.changesMode)):
 
-            if event.is_pressed and not controlState.whilePressed:
+            ### find guid, btn, LED, mode combo in stack
+            ### If top of stack for that LED & mode:
+                ### pop off item (pull and delete from stack)
+                ### if there is a new LED & mode in top spot use set it's LEDConfig
+                ### else use the popped item's defaultLEDconfig
+                ### set_led()
+            ### else delete that item from stack (do not change LED)
 
-                controlState.buttonStateOn = False
-                if LEDIndex is not None:
 
-                    if deviceLEDUsage[LEDIndex] == controlState.LEDConfig:
-                        deviceLEDUsage[LEDIndex] = controlState.defaultLED
-
-            elif not event.is_pressed and controlState.whilePressed:
-                
-                controlState.buttonStateOn = False
-                if LEDIndex is not None:
-                    if controlState.priorLED is None:
-                        deviceLEDUsage[LEDIndex] = controlState.defaultLED
-                    else:
-                        deviceLEDUsage[LEDIndex] = controlState.priorLED
-
-        set_LEDs(controlState.vkbDevice, deviceLEDUsage)
