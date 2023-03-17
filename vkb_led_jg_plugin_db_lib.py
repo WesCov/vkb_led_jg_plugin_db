@@ -178,6 +178,7 @@ class controlStateClass:
                  vkbDevice = None,
                  mode = "Default",
                  changesMode = False,
+                 modeTo = "",
                  whilePressed = False,
                  LEDConfig = None,
                  defaultLEDConfig = None):
@@ -185,6 +186,7 @@ class controlStateClass:
         self.vkbDevice = vkbDevice
         self.mode = mode
         self.changesMode = changesMode
+        self.modeTo = modeTo
         self.whilePressed = whilePressed
         self.LEDConfig = LEDConfig
         self.defaultLEDConfig = defaultLEDConfig
