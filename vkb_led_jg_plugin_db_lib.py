@@ -177,7 +177,7 @@ class controlStateClass:
     def __init__(self,
                  vkbDevice = None,
                  mode = "Default",
-                 changesMode = False,
+                 changesMode = "no",
                  modeTo = "",
                  whilePressed = False,
                  LEDConfig = None,

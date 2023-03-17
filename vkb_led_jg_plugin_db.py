@@ -105,6 +105,12 @@ rgbStrColor3 = StringVariable(
             "0,3,5")
 
 
+# TO DO:
+#   inputs
+#   store mode (or modeTo), changes mode ("no", "toggle", "cycle")
+#
+
+
 controlState = controlStateClass()
 
 
@@ -181,26 +187,62 @@ else:
     def button_action(event, vjoy):
         global controlState
 
+        ##### make a button id
+        ##### Btn id =  guid and btn number (event.device_guid & event.identifier) 
+
         ############ GET THE ON STATE FROM THE STACK
-        buttonStateOn = FALSE
+        rowidForCurrentBtn = 99999
+        maxRowId # for given led
+        buttonStateOn = rowForCurrentBtn > 0
             
-        if event.is_pressed and not buttonStateOn and not contorlState.changesMode:
+        
+        #### org by (might combine later)
+        
+        #### BtnState    Pressed    WhilePressed   ChangesMode   ModeTo
+        
+
+        if not buttonStateOn and event.is_pressed and contorlState.changesMode == "no":     # normal button turn on
 
                 """ PUSH EVENT with event.device_guid, event.identifier,
                     mode, changesMode, LEDConfig, & defaultLEDConfig
                 """
                 set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
 
-        elif ((    buttonStateOn and     event.is_pressed and not controlState.whilePressed) or
-              (    buttonStateOn and not event.is_pressed and     controlState.whilePressed) or
-              (not buttonStateOn and     event.is_pressed and      contorlState.changesMode)):
+        elif not buttonStateOn and event.is_pressed and contorlState.changesMode != "no":      # mode button turn on
+        
+            if controlState.changesMode == "toggle":
 
-            ### find guid, btn, LED, mode combo in stack
-            ### If top of stack for that LED & mode:
-                ### pop off item (pull and delete from stack)
-                ### if there is a new LED & mode in top spot use set it's LEDConfig
-                ### else use the popped item's defaultLEDconfig
-                ### set_led()
-            ### else delete that item from stack (do not change LED)
+                ### if top, POP, set 2nd or default
+                ### else delete(btn, LED) regardless of mode
+                
+            elif controlState.changesMode == "cycle":
+                
+                ### push, set LEDConfig
+                ### del (btn, LED) regarless of mode
+    
+        elif buttonStateOn and event.is_pressed and not controlState.whilePressed:              # normal button turn off
+              
+            ### if top, POP, set 2nd or default
+            ### else delete(btn, LED, mode)
+              
+              
+        elif buttonStateOn and not event.is_pressed and controlState.whilePressed:              # while pressed
+
+            ### if top, POP, set 2nd or default ---- should be top
+            ### else delete(btn, LED, mode) --- should not need to do
+
+
+
+
+
+
+
+### find guid, btn, LED, mode combo in stack
+### If top of stack for that LED & mode:
+    ### pop off item (pull and delete from stack)
+    ### if there is a new LED & mode in top spot use set it's LEDConfig
+    ### else use the popped item's defaultLEDconfig
+    ### set_led()
+### else delete that item from stack (do not change LED)
 
 
