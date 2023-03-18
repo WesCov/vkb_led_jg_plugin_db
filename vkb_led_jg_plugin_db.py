@@ -19,14 +19,21 @@ from vkb_led_jg_plugin_db_lib import *
 
 # hard code the vendor and product ids
 # VKBsim Gladiator EVO R
-vendor_id=0x231d 
-product_id=0x0200
+VENDOR_ID = 0x231d 
+PRODUCT_ID = 0x0200
+
+# event database name and location
+DB_FILENAME = 'vkb_led_jg_plugin.db'
+DB_DIR = os.path.abspath(os.path.dirname(__file__))
+DB_LOCATION = DB_DIR + "\\" + DB_FILENAME
 
 
 # uncomment to post to log
 #log_filename = 'vkb_led_jg_plugin.log'
 #current_dir = os.path.abspath(os.path.dirname(__file__))
 #logging.basicConfig(filename=os.path.join(current_dir, log_filename), level=logging.DEBUG)
+
+
 
 #
 #    Joystick Gremlin UI
@@ -39,10 +46,12 @@ buttonTrigger = PhysicalInputVariable(
 
 mode = ModeVariable("Mode:", "The mode in which to use this mapping")
 
-changesMode = BoolVariable(
-	"Button press changes mode:",
-	"This button has been assigned to change modes.",
-	False)
+changesMode = IntegerVariable(
+	"Mode changes: 0 none, 1 toggles, 2 cycles:",
+	"This button 0 does not change modes, 1 toggles a mode on/off, 2 cycles amoung 2+ modes",
+	0)
+
+modeTo = ModeVariable("Mode this button switchs to:", "What mode does this button switch to, if any")
 
 LEDName = StringVariable("Which LED - Base, Hat, or RGB:", "LED to be activated", "RGB")
 
@@ -115,22 +124,27 @@ controlState = controlStateClass()
 
 
 # get the vkb device, if connected
-controlState.vkbDevice = getUSBDevice(vendor_id, product_id)
+controlState.vkbDevice = getUSBDevice(VENDOR_ID, PRODUCT_ID)
 
 if controlState.vkbDevice is None:
     
-    #gremlin.util.log(f"VKB Device not active. Vendor ID: {hex(vendor_id)} Product ID {hex(product_id)}")
+    #gremlin.util.log(f"VKB Device not active. Vendor ID: {hex(VENDOR_ID)} Product ID {hex(PRODUCT_ID)}")
     pass
 
 else:
     
-    #gremlin.util.log(f"VKB Device found. Vendor ID: {vendor_id} Product ID {product_id}")
+    #gremlin.util.log(f"VKB Device found. Vendor ID: {VENDOR_ID} Product ID {PRODUCT_ID}")
 
     # packup the UI inputs into the controlState variable
 
     LED_id = LEDNameToId(LEDName.value)
-    controlState.changesMode = changesmode.value
     controlState.whilePressed = whilePressed.value
+    # store the mode the button represents, not the one it is active in
+    controlState.changesMode = changesmode.value
+    if changesmode.value:
+        contolState.mode = modeTo.value
+    else:
+        contolState.mode = mode.value
     controlState.LEDConfig = LEDClass(LED_id = LED_id)
     
     # color1 & color2 have different uses depending on the LED id
@@ -167,19 +181,23 @@ else:
     
     # set up the led configuration to go back to
     if LED_id == 10:
-        controlState.defaultLED = LEDClass(LED_id = controlState.LED_id,
-                                           colorMode = 0,
-                                           LEDMode = 1,
-                                           color1 = stringRGBToList(rgbStrColor3.value),
-                                           color2 = (0,0,0))
+        controlState.defaultLEDConfig = LEDClass(LED_id = controlState.LED_id,
+                                                 colorMode = 0,
+                                                 LEDMode = 1,
+                                                 color1 = stringRGBToList(rgbStrColor3.value),
+                                                 color2 = (0,0,0))
     else:
-        controlState.defaultLED = LEDClass(LED_id = controlState.LED_id,
-                                           colorMode = 0,
-                                           LEDMode = 0,
-                                           color1 = (0,0,0),
-                                           color2 = (0,0,0))
+        controlState.defaultLEDConfig = LEDClass(LED_id = controlState.LED_id,
+                                                 colorMode = 0,
+                                                 LEDMode = 0,
+                                                 color1 = (0,0,0),
+                                                 color2 = (0,0,0))
    
+    ### open a db file.  This will be called for each instance but there is only one file
 
+    ### 
+
+    gremlin.util.log(f"DB Location: {DB_LOCATION}")
              
     decorator_button = buttonTrigger.create_decorator(mode.value)
 
@@ -187,8 +205,8 @@ else:
     def button_action(event, vjoy):
         global controlState
 
-        ##### make a button id
-        ##### Btn id =  guid and btn number (event.device_guid & event.identifier) 
+        button_id =     "-".join([str(event.device_guid)[1:-1], str(event.identifier)])
+    
 
         ############ GET THE ON STATE FROM THE STACK
         rowidForCurrentBtn = 99999
@@ -212,22 +230,26 @@ else:
         
             if controlState.changesMode == "toggle":
 
+                x = 1
                 ### if top, POP, set 2nd or default
                 ### else delete(btn, LED) regardless of mode
                 
             elif controlState.changesMode == "cycle":
                 
+                x=2
                 ### push, set LEDConfig
                 ### del (btn, LED) regarless of mode
     
         elif buttonStateOn and event.is_pressed and not controlState.whilePressed:              # normal button turn off
-              
+            
+            x = 3
             ### if top, POP, set 2nd or default
             ### else delete(btn, LED, mode)
               
               
         elif buttonStateOn and not event.is_pressed and controlState.whilePressed:              # while pressed
 
+            x = 4
             ### if top, POP, set 2nd or default ---- should be top
             ### else delete(btn, LED, mode) --- should not need to do
 

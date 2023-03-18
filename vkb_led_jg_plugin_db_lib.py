@@ -47,10 +47,17 @@ import pywinusb.hid as hid
 import struct
 import bitstruct as bs
 
+import sqlite3
+
 LED_REPORT_ID = 0x59
 LED_REPORT_LEN = 129
 LED_SET_OP_CODE = bytes.fromhex("59a50a")
 LED_CONFIG_COUNT = 4    # plus a dummy
+
+# event database name and location
+DB_FILENAME = 'vkb_led_jg_plugin.db'
+DB_DIR = os.path.abspath(os.path.dirname(__file__))
+
 
 
 class LEDClass:
@@ -177,7 +184,7 @@ class controlStateClass:
     def __init__(self,
                  vkbDevice = None,
                  mode = "Default",
-                 changesMode = "no",
+                 changesMode = 0,
                  modeTo = "",
                  whilePressed = False,
                  LEDConfig = None,
@@ -227,3 +234,34 @@ def getLEDIndex(LED_id, LEDConfigs):
         return None
     else:
         return i
+
+"""
+    Database functions
+"""
+
+def createLEDStack():
+    
+    the_db = sqlite3.connect(r'C:/Users/wkwkw/Documents/Python Projects/SQLite Test/Button Event Stack.db')
+
+    cursor_obj = the_db.cursor()
+    
+    the_db.execute("DROP TABLE IF EXISTS LEDStack;")
+    the_db.execute("""CREATE TABLE IF NOT EXISTS LEDStack(button_id INT,
+                                                          mode TEXT,
+                                                          changesMode INT
+                                                          LEDConfig_LED_id INT,
+                                                          LEDConfig_colorMode INT,
+                                                          LEDConfig_ledMode INT,
+                                                          LEDConfig_color1 TEXT,
+                                                          LEDConfig_color2 TEXT,
+                                                          defaultLEDConfig_LED_id INT,
+                                                          defaultLEDConfig_colorMode INT,
+                                                          defaultLEDConfig_ledMode INT,
+                                                          defaultLEDConfig_color1 TEXT,
+                                                          defaultLEDConfig_color2 TEXT);""")
+    the_db.commit()
+
+
+
+
+
