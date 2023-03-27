@@ -212,14 +212,19 @@ else:
             rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id)            
         else:
             rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id, controlState.mode)
-        buttonStateOn = rowForCurrentBtn > 0
+        buttonStateOn = rowidCurrentBtn > 0
         
         #### org by (might combine later)        
         #### BtnState    Pressed    WhilePressed   ChangesMode   ModeTo
+ 
         
+        gremlin.util.log(f"state: {buttonStateOn} pressed: {event.is_pressed} chgmode: {controlState.changesMode} mode:{controlState.mode}")
+
+    
         if ((not buttonStateOn and event.is_pressed and controlState.changesMode == "no") or       # normal
             (not buttonStateOn and event.is_pressed and controlState.changesMode == "toggle")):    # mode toggle
 
+            gremlin.util.log("PUSH & SET")
             # push, set LEDConfig
             pushButtonLEDEvent(controlState.dbName, button_id, controlState.LEDConfig, controlState.mode)
             set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
@@ -238,6 +243,7 @@ else:
 
             # x = is #1?            
             rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id, controlState.mode)
+            gremlin.util.log(f"rowidCurrentBtn: {rowidCurrentBtn} rowidLastLED: {rowidLastLED}")
             # delete btn, led, mode
             deleteRowid(controlState.dbName, rowidCurrentBtn)
             if rowidCurrentBtn == rowidLastLED:

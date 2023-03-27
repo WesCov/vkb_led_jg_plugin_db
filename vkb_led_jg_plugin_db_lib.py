@@ -40,6 +40,8 @@ Colors:
     The remaining functions are utilities to translate UI input or search the USB Lighting report
 """
 
+import gremlin
+from gremlin.user_plugin import *
 
 import os
 import pywinusb.hid as hid
@@ -272,8 +274,8 @@ def pushButtonLEDEvent(dbName, button_id, LEDConfig, mode):
                     mode,
                     LEDConfig.colorMode,
                     LEDConfig.LEDMode,
-                    ",".join(LEDConfig.color1),
-                    ",".join(LEDConfig.color2)])
+                    ",".join(map(str, LEDConfig.color1)),
+                    ",".join(map(str, LEDConfig.color2))])
     the_db.commit()
     the_db.close()
 
@@ -284,7 +286,7 @@ def pullRowidLEDConfig(dbName, rowid):
     cursor.execute(f"SELECT * FROM LEDStack WHERE rowid = {rowid};")
     result = cursor.fetchone()
     the_db.close()
-    LEDConfig = LEDClass(result[1], result[3], result[4], list(result[5].split(",")), list(result[6].split(",")))
+    LEDConfig = LEDClass(result[1], result[3], result[4], list(map(int, result[5].split(","))), list(map(int, result[6].split(","))))
     return LEDConfig
 
 # pull the LEDConfig from a last LED & mode
@@ -297,7 +299,7 @@ def pullLastLEDConfig(dbName, LED_id, mode):
     if result == None:
         return None
     else:
-        LEDConfig = LEDClass(result[1], result[3], result[4], list(result[5].split(",")), list(result[6].split(",")))
+        LEDConfig = LEDClass(result[1], result[3], result[4], list(map(int, result[5].split(","))), list(map(int, result[6].split(","))))
         return LEDConfig
 
 
@@ -306,50 +308,54 @@ def getRowidButtonLEDModeEvent(dbName, button_id, LED_id, mode=None):
     the_db = sqlite3.connect(dbName)
     cursor = the_db.cursor()
     if mode == None:
-        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id={button_id} AND LED_id={LED_id};")        
+        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id='{button_id}' AND LED_id={LED_id};")        
     else:
-        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id={button_id} AND LED_id={LED_id} AND mode='{mode}';")
+        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id='{button_id}' AND LED_id={LED_id} AND mode='{mode}';")
     result = cursor.fetchone()
     the_db.close()
     if result == None:
-        return(0)
+        return 0
     else:
-        return(result[0])
+        return result[0]
     
 # return the row id of a given btn, LED, NO mode
 def getRowidButtonLEDEvent(dbName, button_id, LED_id):
     the_db = sqlite3.connect(dbName)
     cursor = the_db.cursor()
-    cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id={button_id} AND LED_id={LED_id};")
+    cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id='{button_id}' AND LED_id={LED_id};")
     result = cursor.fetchone()
     the_db.close()
     if result == None:
-        return(0)
+        return 0
     else:
-        return(result[0])
+        return result[0]
 
 # return the last row if for given LED & mode
 def getLastRowidLEDEvent(dbName, LED_id, mode):
     the_db = sqlite3.connect(dbName)
     cursor = the_db.cursor()
-    result = cursor.execute(f"SELECT rowid FROM LEDStack WHERE rowid = (SELECT MAX(rowid) FROM LEDStack WHERE LED_id = {LED_id} and mode = '{mode}');")
+    cursor.execute(f"SELECT rowid FROM LEDStack WHERE rowid = (SELECT MAX(rowid) FROM LEDStack WHERE LED_id = {LED_id} and mode = '{mode}');")
+    result = cursor.fetchone()
+    the_db.close()
     if result == None:
-        return(0)
+        return 0
     else:
-        result = cursor.fetchone()[0]
+        return result[0]
 
 # delete a given row
 def deleteRowid(dbName, rowid):
     the_db = sqlite3.connect(dbName)
-    cursor = the_db.cursor()    
+    cursor = the_db.cursor()
     cursor.execute(f"DELETE FROM LEDStack WHERE rowid = {rowid};")
+    the_db.commit()
     the_db.close()
 
 # delete the record given btn, LED, NO mode
 def deleteRowidButtonLEDEvent(dbName, button_id, LED_id):
     the_db = sqlite3.connect(dbName)
     cursor = the_db.cursor()
-    cursor.execute(f"DELETE FROM LEDStack WHERE button_id={button_id} AND LED_id={LED_id};")
+    cursor.execute(f"DELETE FROM LEDStack WHERE button_id='{button_id}' AND LED_id={LED_id};")
+    the_db.commit()
     the_db.close()
 
 # if exists, delete given button & LED with optional mode
@@ -357,9 +363,9 @@ def deleteBtnLEDMode(dbName, button_id, LED_id, mode=None):
     the_db = sqlite3.connect(dbName)
     cursor = the_db.cursor()
     if mode == None:
-        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id = {button_id} and LEDConfig_LED_id = {LED_id};")        
+        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id = '{button_id}' and LEDConfig_LED_id = {LED_id};")        
     else:
-        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id = {button_id} and LEDConfig_LED_id = {LED_id} and mode = '{mode}';")
+        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id = '{button_id}' and LEDConfig_LED_id = {LED_id} and mode = '{mode}';")
     result = cursor.fetchone()
     if result != None:
         cursor.execute(f"DELETE FROM LEDStack WHERE rowid = {result[0]};")
