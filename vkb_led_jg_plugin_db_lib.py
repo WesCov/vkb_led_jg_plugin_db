@@ -49,15 +49,15 @@ import bitstruct as bs
 
 import sqlite3
 
+the_db = sqlite3.connect(r'C:/Users/wkwkw/Documents/Python Projects/SQLite Test/Button Event Stack.db')
+
+the_db.close()
+
+
 LED_REPORT_ID = 0x59
 LED_REPORT_LEN = 129
 LED_SET_OP_CODE = bytes.fromhex("59a50a")
 LED_CONFIG_COUNT = 4    # plus a dummy
-
-# event database name and location
-DB_FILENAME = 'vkb_led_jg_plugin.db'
-DB_DIR = os.path.abspath(os.path.dirname(__file__))
-
 
 
 class LEDClass:
@@ -185,18 +185,20 @@ class controlStateClass:
                  vkbDevice = None,
                  mode = "Default",
                  changesMode = 0,
-                 modeTo = "",
                  whilePressed = False,
                  LEDConfig = None,
-                 defaultLEDConfig = None):
+                 defaultLEDConfig = None,
+                 dbName = None):
+        # modeTo = "",
         
         self.vkbDevice = vkbDevice
         self.mode = mode
         self.changesMode = changesMode
-        self.modeTo = modeTo
+        #self.modeTo = modeTo
         self.whilePressed = whilePressed
         self.LEDConfig = LEDConfig
         self.defaultLEDConfig = defaultLEDConfig
+        self.dbName = dbName
 
 
 def LEDNameToId(s):
@@ -209,12 +211,22 @@ def LEDNameToId(s):
     else:
         return None
 
+# used for interface
 def stringRGBToList(s):
     result = (0,0,0)
     if len(s) == 5 and s.count(',') == 2:
         if (0 <= int(s[0]) <= 7) and (0 <= int(s[2]) <= 7) and (0 <= int(s[4]) <= 7):
             result = (int(s[0]), int(s[2]), int(s[4]))
     return result
+
+
+def changesModeIntToString(changesMode):
+    if changesMode == 0:
+        return("no")
+    elif changesMode == 1:
+        return("toggle")
+    elif changesMode == 2:
+        return("cycle")
 
 
 def getUSBDevice(vendor_id, product_id):
@@ -239,29 +251,118 @@ def getLEDIndex(LED_id, LEDConfigs):
     Database functions
 """
 
-def createLEDStack():
-    
-    the_db = sqlite3.connect(r'C:/Users/wkwkw/Documents/Python Projects/SQLite Test/Button Event Stack.db')
-
-    cursor_obj = the_db.cursor()
-    
+def createLEDStack(dbName):
+    the_db = sqlite3.connect(dbName)
     the_db.execute("DROP TABLE IF EXISTS LEDStack;")
-    the_db.execute("""CREATE TABLE IF NOT EXISTS LEDStack(button_id INT,
+    the_db.execute("""CREATE TABLE IF NOT EXISTS LEDStack(button_id TEXT,
+                                                          LED_id INT,
                                                           mode TEXT,
-                                                          changesMode INT
-                                                          LEDConfig_LED_id INT,
-                                                          LEDConfig_colorMode INT,
-                                                          LEDConfig_ledMode INT,
-                                                          LEDConfig_color1 TEXT,
-                                                          LEDConfig_color2 TEXT,
-                                                          defaultLEDConfig_LED_id INT,
-                                                          defaultLEDConfig_colorMode INT,
-                                                          defaultLEDConfig_ledMode INT,
-                                                          defaultLEDConfig_color1 TEXT,
-                                                          defaultLEDConfig_color2 TEXT);""")
+                                                          colorMode INT,
+                                                          LEDMode INT,
+                                                          color1 TEXT,
+                                                          color2 TEXT);""")
     the_db.commit()
+    the_db.close()
+
+def pushButtonLEDEvent(dbName, button_id, LEDConfig, mode):
+    the_db = sqlite3.connect(dbName)
+    the_db.execute("INSERT INTO LEDStack VALUES(?, ?, ?, ?, ?, ?, ?);", 
+                   [button_id,
+                    LEDConfig.LED_id,
+                    mode,
+                    LEDConfig.colorMode,
+                    LEDConfig.LEDMode,
+                    ",".join(LEDConfig.color1),
+                    ",".join(LEDConfig.color2)])
+    the_db.commit()
+    the_db.close()
+
+# pull the LEDConfig from a given row
+def pullRowidLEDConfig(dbName, rowid):
+    the_db = sqlite3.connect(dbName)
+    cursor = the_db.cursor()    
+    cursor.execute(f"SELECT * FROM LEDStack WHERE rowid = {rowid};")
+    result = cursor.fetchone()
+    the_db.close()
+    LEDConfig = LEDClass(result[1], result[3], result[4], list(result[5].split(",")), list(result[6].split(",")))
+    return LEDConfig
+
+# pull the LEDConfig from a last LED & mode
+def pullLastLEDConfig(dbName, LED_id, mode):
+    the_db = sqlite3.connect(dbName)
+    cursor = the_db.cursor()
+    result = cursor.execute(f"SELECT * FROM LEDStack WHERE rowid = (SELECT MAX(rowid) FROM LEDStack WHERE LED_id = {LED_id} and mode = '{mode}');")
+    result = cursor.fetchone()
+    the_db.close()
+    if result == None:
+        return None
+    else:
+        LEDConfig = LEDClass(result[1], result[3], result[4], list(result[5].split(",")), list(result[6].split(",")))
+        return LEDConfig
 
 
+# return the row id of a given btn, LED, & optional mode
+def getRowidButtonLEDModeEvent(dbName, button_id, LED_id, mode=None):
+    the_db = sqlite3.connect(dbName)
+    cursor = the_db.cursor()
+    if mode == None:
+        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id={button_id} AND LED_id={LED_id};")        
+    else:
+        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id={button_id} AND LED_id={LED_id} AND mode='{mode}';")
+    result = cursor.fetchone()
+    the_db.close()
+    if result == None:
+        return(0)
+    else:
+        return(result[0])
+    
+# return the row id of a given btn, LED, NO mode
+def getRowidButtonLEDEvent(dbName, button_id, LED_id):
+    the_db = sqlite3.connect(dbName)
+    cursor = the_db.cursor()
+    cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id={button_id} AND LED_id={LED_id};")
+    result = cursor.fetchone()
+    the_db.close()
+    if result == None:
+        return(0)
+    else:
+        return(result[0])
 
+# return the last row if for given LED & mode
+def getLastRowidLEDEvent(dbName, LED_id, mode):
+    the_db = sqlite3.connect(dbName)
+    cursor = the_db.cursor()
+    result = cursor.execute(f"SELECT rowid FROM LEDStack WHERE rowid = (SELECT MAX(rowid) FROM LEDStack WHERE LED_id = {LED_id} and mode = '{mode}');")
+    if result == None:
+        return(0)
+    else:
+        result = cursor.fetchone()[0]
+
+# delete a given row
+def deleteRowid(dbName, rowid):
+    the_db = sqlite3.connect(dbName)
+    cursor = the_db.cursor()    
+    cursor.execute(f"DELETE FROM LEDStack WHERE rowid = {rowid};")
+    the_db.close()
+
+# delete the record given btn, LED, NO mode
+def deleteRowidButtonLEDEvent(dbName, button_id, LED_id):
+    the_db = sqlite3.connect(dbName)
+    cursor = the_db.cursor()
+    cursor.execute(f"DELETE FROM LEDStack WHERE button_id={button_id} AND LED_id={LED_id};")
+    the_db.close()
+
+# if exists, delete given button & LED with optional mode
+def deleteBtnLEDMode(dbName, button_id, LED_id, mode=None):
+    the_db = sqlite3.connect(dbName)
+    cursor = the_db.cursor()
+    if mode == None:
+        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id = {button_id} and LEDConfig_LED_id = {LED_id};")        
+    else:
+        cursor.execute(f"SELECT rowid FROM LEDStack WHERE button_id = {button_id} and LEDConfig_LED_id = {LED_id} and mode = '{mode}';")
+    result = cursor.fetchone()
+    if result != None:
+        cursor.execute(f"DELETE FROM LEDStack WHERE rowid = {result[0]};")
+    the_db.close()
 
 

@@ -10,6 +10,8 @@ version with db (event database)
 
 """
 
+#import sys
+
 import os
 import gremlin
 from gremlin.user_plugin import *
@@ -28,9 +30,12 @@ DB_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_LOCATION = DB_DIR + "\\" + DB_FILENAME
 
 
+# a db will be created where the plugin resides (not where the library is)
+CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
+DB_NAME = CURRENT_DIR + "\\" + "VKB_LED_event_stack.db"
+
 # uncomment to post to log
 #log_filename = 'vkb_led_jg_plugin.log'
-#current_dir = os.path.abspath(os.path.dirname(__file__))
 #logging.basicConfig(filename=os.path.join(current_dir, log_filename), level=logging.DEBUG)
 
 
@@ -51,7 +56,7 @@ changesMode = IntegerVariable(
 	"This button 0 does not change modes, 1 toggles a mode on/off, 2 cycles amoung 2+ modes",
 	0)
 
-modeTo = ModeVariable("Mode this button switchs to:", "What mode does this button switch to, if any")
+modeTo = ModeVariable("Mode this button switches to:", "What mode does this button switch to, if any")
 
 LEDName = StringVariable("Which LED - Base, Hat, or RGB:", "LED to be activated", "RGB")
 
@@ -114,11 +119,6 @@ rgbStrColor3 = StringVariable(
             "0,3,5")
 
 
-# TO DO:
-#   inputs
-#   store mode (or modeTo), changes mode ("no", "toggle", "cycle")
-#
-
 
 controlState = controlStateClass()
 
@@ -138,14 +138,15 @@ else:
     # packup the UI inputs into the controlState variable
 
     LED_id = LEDNameToId(LEDName.value)
+    controlState.LEDConfig = LEDClass(LED_id = LED_id)
     controlState.whilePressed = whilePressed.value
     # store the mode the button represents, not the one it is active in
-    controlState.changesMode = changesmode.value
-    if changesmode.value:
-        contolState.mode = modeTo.value
+    if changesMode.value:
+        controlState.mode = modeTo.value
     else:
-        contolState.mode = mode.value
-    controlState.LEDConfig = LEDClass(LED_id = LED_id)
+        controlState.mode = mode.value
+    controlState.changesMode = changesModeIntToString(changesMode.value)    # "no", "toggle", "cycle"
+    controlState.dbName = DB_NAME
     
     # color1 & color2 have different uses depending on the LED id
     if LED_id == 0:        # Base
@@ -181,23 +182,22 @@ else:
     
     # set up the led configuration to go back to
     if LED_id == 10:
-        controlState.defaultLEDConfig = LEDClass(LED_id = controlState.LED_id,
+        controlState.defaultLEDConfig = LEDClass(LED_id = controlState.LEDConfig.LED_id,
                                                  colorMode = 0,
                                                  LEDMode = 1,
                                                  color1 = stringRGBToList(rgbStrColor3.value),
                                                  color2 = (0,0,0))
     else:
-        controlState.defaultLEDConfig = LEDClass(LED_id = controlState.LED_id,
+        controlState.defaultLEDConfig = LEDClass(LED_id = controlState.LEDConfig.LED_id,
                                                  colorMode = 0,
                                                  LEDMode = 0,
                                                  color1 = (0,0,0),
                                                  color2 = (0,0,0))
    
     ### open a db file.  This will be called for each instance but there is only one file
+    ### create an empty LEDStack table
+    createLEDStack(controlState.dbName)
 
-    ### 
-
-    gremlin.util.log(f"DB Location: {DB_LOCATION}")
              
     decorator_button = buttonTrigger.create_decorator(mode.value)
 
@@ -205,66 +205,62 @@ else:
     def button_action(event, vjoy):
         global controlState
 
-        button_id =     "-".join([str(event.device_guid)[1:-1], str(event.identifier)])
+        button_id = "-".join([str(event.device_guid)[1:-1], str(event.identifier)])
     
-
-        ############ GET THE ON STATE FROM THE STACK
-        rowidForCurrentBtn = 99999
-        maxRowId # for given led
+        ### if the button is on the stack then it is in the on state
+        if controlState.changesMode == "toggle":
+            rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id)            
+        else:
+            rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id, controlState.mode)
         buttonStateOn = rowForCurrentBtn > 0
-            
         
-        #### org by (might combine later)
-        
+        #### org by (might combine later)        
         #### BtnState    Pressed    WhilePressed   ChangesMode   ModeTo
         
+        if ((not buttonStateOn and event.is_pressed and controlState.changesMode == "no") or       # normal
+            (not buttonStateOn and event.is_pressed and controlState.changesMode == "toggle")):    # mode toggle
 
-        if not buttonStateOn and event.is_pressed and contorlState.changesMode == "no":     # normal button turn on
+            # push, set LEDConfig
+            pushButtonLEDEvent(controlState.dbName, button_id, controlState.LEDConfig, controlState.mode)
+            set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
 
-                """ PUSH EVENT with event.device_guid, event.identifier,
-                    mode, changesMode, LEDConfig, & defaultLEDConfig
-                """
-                set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
-
-        elif not buttonStateOn and event.is_pressed and contorlState.changesMode != "no":      # mode button turn on
+        elif not buttonStateOn and event.is_pressed and controlState.changesMode != "cycle":       # mode button turn on
         
-            if controlState.changesMode == "toggle":
+            # if on stack delete regradless of mode
+            deleteBtnLEDMode(controlState.dbName, button_id, controlState.LEDConfig)
+            # push & set
+            pushButtonLEDEvent(controlState.dbName, button_id, controlState.LEDConfig, controlState.mode)
+            set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
 
-                x = 1
-                ### if top, POP, set 2nd or default
-                ### else delete(btn, LED) regardless of mode
-                
-            elif controlState.changesMode == "cycle":
-                
-                x=2
-                ### push, set LEDConfig
-                ### del (btn, LED) regarless of mode
     
-        elif buttonStateOn and event.is_pressed and not controlState.whilePressed:              # normal button turn off
+        elif ((buttonStateOn and     event.is_pressed and not controlState.whilePressed and controlState.changesMode == "no") or      # normal button turn off
+              (buttonStateOn and not event.is_pressed and     controlState.whilePressed and controlState.changesMode == "no")):       # while pressed turn off
+
+            # x = is #1?            
+            rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id, controlState.mode)
+            # delete btn, led, mode
+            deleteRowid(controlState.dbName, rowidCurrentBtn)
+            if rowidCurrentBtn == rowidLastLED:
+                # get LEDConfig of next LED in stack -- if any
+                resultLED = pullLastLEDConfig(controlState.dbName, controlState.LEDConfig.LED_id, controlState.mode)
+                if resultLED == None:
+                    set_LEDs(controlState.vkbDevice, [controlState.defaultLEDConfig])
+                else:
+                    set_LEDs(controlState.vkbDevice, [resultLED])
             
-            x = 3
-            ### if top, POP, set 2nd or default
-            ### else delete(btn, LED, mode)
-              
-              
-        elif buttonStateOn and not event.is_pressed and controlState.whilePressed:              # while pressed
-
-            x = 4
-            ### if top, POP, set 2nd or default ---- should be top
-            ### else delete(btn, LED, mode) --- should not need to do
-
-
-
-
-
-
-
-### find guid, btn, LED, mode combo in stack
-### If top of stack for that LED & mode:
-    ### pop off item (pull and delete from stack)
-    ### if there is a new LED & mode in top spot use set it's LEDConfig
-    ### else use the popped item's defaultLEDconfig
-    ### set_led()
-### else delete that item from stack (do not change LED)
-
+        elif buttonStateOn and event.is_pressed and not controlState.whilepressed and controlState.changesMode == "toggle":
+            
+            # x = is #1?            
+            rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id)
+            # delete btn, led, NO mode
+            deleteRowid(controlState.dbName, rowidCurrentBtn)
+            if rowidCurrentBtn == rowidLastLED:
+                # get LEDConfig of next LED in stack -- if any
+                resultLED = pullLastLEDConfig(controlState.dbName, controlState.LEDConfig.LED_id, controlState.mode)
+                if resultLED == None:
+                    set_LEDs(controlState.vkbDevice, [controlState.defaultLEDConfig])
+                else:
+                    set_LEDs(controlState.vkbDevice, [resultLED])
+        
+            
 
