@@ -49,14 +49,14 @@ buttonTrigger = PhysicalInputVariable(
 	"Button that triggers the LED.",
 	[gremlin.common.InputType.JoystickButton])
 
-mode = ModeVariable("Mode:", "The mode in which to use this mapping")
+mode = ModeVariable("The Mode in which the button is activated:", "The mode in which to use this mapping.")
 
-changesMode = IntegerVariable(
-	"Mode changes: 0 none, 1 toggles, 2 cycles:",
-	"This button 0 does not change modes, 1 toggles a mode on/off, 2 cycles amoung 2+ modes",
-	0)
+changesMode = BoolVariable(
+	"This button changes the mode",
+	"This button has been assigned the Switch Mode action.",
+	False)
 
-modeTo = ModeVariable("Mode this button switches to:", "What mode does this button switch to, if any")
+modeTo = ModeVariable("If checked, this button switches to ", "What Mode does this button switch to, if any")
 
 LEDName = StringVariable("Which LED - Base, Hat, or RGB:", "LED to be activated", "RGB")
 
@@ -139,15 +139,14 @@ else:
 
     LED_id = LEDNameToId(LEDName.value)
     controlState.LEDConfig = LEDClass(LED_id = LED_id)
-    controlState.whilePressed = whilePressed.value
-    # store the mode the button represents, not the one it is active in
     if changesMode.value:
-        controlState.mode = modeTo.value
+        controlState.whilePressed = False
     else:
-        controlState.mode = mode.value
-    controlState.changesMode = changesModeIntToString(changesMode.value)    # "no", "toggle", "cycle"
+        controlState.whilePressed = whilePressed.value
+    # store the mode the button is activated in
+    controlState.mode = mode.value
     controlState.dbName = DB_NAME
-    
+         
     # color1 & color2 have different uses depending on the LED id
     if LED_id == 0:        # Base
         
@@ -198,9 +197,9 @@ else:
     ### create an empty LEDStack table
     createLEDStack(controlState.dbName)
 
-             
+    
     decorator_button = buttonTrigger.create_decorator(mode.value)
-
+    
     @decorator_button.button(buttonTrigger.input_id)
     def button_action(event, vjoy):
         global controlState
@@ -208,65 +207,64 @@ else:
         button_id = "-".join([str(event.device_guid)[1:-1], str(event.identifier)])
     
         ### if the button is on the stack then it is in the on state
-        if controlState.changesMode == "toggle":
-            rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id)            
-        else:
-            rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id, controlState.mode)
+        rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id, controlState.mode)
         buttonStateOn = rowidCurrentBtn > 0
-        
-        #### org by (might combine later)        
-        #### BtnState    Pressed    WhilePressed   ChangesMode   ModeTo
- 
-        
-        gremlin.util.log(f"state: {buttonStateOn} pressed: {event.is_pressed} chgmode: {controlState.changesMode} mode:{controlState.mode}")
+           
+        if not buttonStateOn and event.is_pressed:
 
-    
-        if ((not buttonStateOn and event.is_pressed and controlState.changesMode == "no") or       # normal
-            (not buttonStateOn and event.is_pressed and controlState.changesMode == "toggle")):    # mode toggle
-
-            gremlin.util.log("PUSH & SET")
             # push, set LEDConfig
             pushButtonLEDEvent(controlState.dbName, button_id, controlState.LEDConfig, controlState.mode)
             set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
-
-        elif not buttonStateOn and event.is_pressed and controlState.changesMode != "cycle":       # mode button turn on
-        
-            # if on stack delete regradless of mode
-            deleteBtnLEDMode(controlState.dbName, button_id, controlState.LEDConfig)
-            # push & set
-            pushButtonLEDEvent(controlState.dbName, button_id, controlState.LEDConfig, controlState.mode)
-            set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
-
     
-        elif ((buttonStateOn and     event.is_pressed and not controlState.whilePressed and controlState.changesMode == "no") or      # normal button turn off
-              (buttonStateOn and not event.is_pressed and     controlState.whilePressed and controlState.changesMode == "no")):       # while pressed turn off
+        elif ((buttonStateOn and     event.is_pressed and not controlState.whilePressed) or      # normal button turn off
+              (buttonStateOn and not event.is_pressed and     controlState.whilePressed)):       # while pressed turn off
 
             # x = is #1?            
-            rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id, controlState.mode)
-            gremlin.util.log(f"rowidCurrentBtn: {rowidCurrentBtn} rowidLastLED: {rowidLastLED}")
+            rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id)
             # delete btn, led, mode
             deleteRowid(controlState.dbName, rowidCurrentBtn)
             if rowidCurrentBtn == rowidLastLED:
                 # get LEDConfig of next LED in stack -- if any
-                resultLED = pullLastLEDConfig(controlState.dbName, controlState.LEDConfig.LED_id, controlState.mode)
+                resultLED = pullLastLEDConfig(controlState.dbName, controlState.LEDConfig.LED_id)
                 if resultLED == None:
                     set_LEDs(controlState.vkbDevice, [controlState.defaultLEDConfig])
                 else:
                     set_LEDs(controlState.vkbDevice, [resultLED])
             
-        elif buttonStateOn and event.is_pressed and not controlState.whilepressed and controlState.changesMode == "toggle":
-            
-            # x = is #1?            
-            rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id)
-            # delete btn, led, NO mode
-            deleteRowid(controlState.dbName, rowidCurrentBtn)
-            if rowidCurrentBtn == rowidLastLED:
-                # get LEDConfig of next LED in stack -- if any
-                resultLED = pullLastLEDConfig(controlState.dbName, controlState.LEDConfig.LED_id, controlState.mode)
-                if resultLED == None:
-                    set_LEDs(controlState.vkbDevice, [controlState.defaultLEDConfig])
-                else:
-                    set_LEDs(controlState.vkbDevice, [resultLED])
+    
+    # this function is called only in the MoveTo mode and removes the prior mode if on.
+    if changesMode.value:
         
-            
+        decorator_button = buttonTrigger.create_decorator(modeTo.value)
+        
+        @decorator_button.button(buttonTrigger.input_id)
+        def button_action(event, vjoy):
+            global controlState
+    
+            button_id = "-".join([str(event.device_guid)[1:-1], str(event.identifier)])
+        
+            ### if the button is on the stack then it is in the on state
+            rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id)
+            buttonStateOn = rowidCurrentBtn > 0
+
+            if buttonStateOn and event.is_pressed:
+                
+                # x = is #1?            
+                rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id)
+                # delete btn, led, NO mode
+                deleteRowid(controlState.dbName, rowidCurrentBtn)
+                if rowidCurrentBtn == rowidLastLED:
+                    # get LEDConfig of next LED in stack -- if any
+                    resultLED = pullLastLEDConfig(controlState.dbName, controlState.LEDConfig.LED_id)
+                    if resultLED == None:
+                        set_LEDs(controlState.vkbDevice, [controlState.defaultLEDConfig])
+                    else:
+                        set_LEDs(controlState.vkbDevice, [resultLED])
+
+
+
+
+
+
+
 
