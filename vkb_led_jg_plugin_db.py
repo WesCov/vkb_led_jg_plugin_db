@@ -49,10 +49,10 @@ buttonTrigger = PhysicalInputVariable(
 	"Button that triggers the LED.",
 	[gremlin.common.InputType.JoystickButton])
 
-mode = ModeVariable("The Mode in which the button is activated:", "The mode in which to use this mapping.")
+mode = ModeVariable("The Mode in which the button is activated:", "The Mode in which to use this mapping.")
 
 changesMode = BoolVariable(
-	"This button changes the mode",
+	"This button changes the Mode",
 	"This button has been assigned the Switch Mode action.",
 	False)
 
