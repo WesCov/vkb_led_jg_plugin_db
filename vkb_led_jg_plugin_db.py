@@ -1,16 +1,11 @@
-"""
-
+'''
 Wesley Covalt
 
-Joystick Gremlin plugin to control the three LEDs of a VKB Gladiator flightstick.
+A Joystick Gremlin plugin to control the three LEDs of a VKB Gladiator flightstick.
 
-Please see the README file for directions, credits, and limitations.
+Please see the vkb_led_jg_plugin_db.pdf for directions and credits.
 
-version with db (event database)
-
-"""
-
-#import sys
+'''
 
 import os
 import gremlin
@@ -206,25 +201,21 @@ else:
 
         button_id = "-".join([str(event.device_guid)[1:-1], str(event.identifier)])
     
-        ### if the button is on the stack then it is in the on state
+        ### if the button is on the stack then it is in the "on" state
         rowidCurrentBtn = getRowidButtonLEDModeEvent(controlState.dbName, button_id, controlState.LEDConfig.LED_id, controlState.mode)
         buttonStateOn = rowidCurrentBtn > 0
            
         if not buttonStateOn and event.is_pressed:
 
-            # push, set LEDConfig
             pushButtonLEDEvent(controlState.dbName, button_id, controlState.LEDConfig, controlState.mode)
             set_LEDs(controlState.vkbDevice, [controlState.LEDConfig])
     
         elif ((buttonStateOn and     event.is_pressed and not controlState.whilePressed) or      # normal button turn off
               (buttonStateOn and not event.is_pressed and     controlState.whilePressed)):       # while pressed turn off
 
-            # x = is #1?            
             rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id)
-            # delete btn, led, mode
             deleteRowid(controlState.dbName, rowidCurrentBtn)
             if rowidCurrentBtn == rowidLastLED:
-                # get LEDConfig of next LED in stack -- if any
                 resultLED = pullLastLEDConfig(controlState.dbName, controlState.LEDConfig.LED_id)
                 if resultLED == None:
                     set_LEDs(controlState.vkbDevice, [controlState.defaultLEDConfig])
@@ -249,12 +240,9 @@ else:
 
             if buttonStateOn and event.is_pressed:
                 
-                # x = is #1?            
                 rowidLastLED = getLastRowidLEDEvent(controlState.dbName, controlState.LEDConfig.LED_id)
-                # delete btn, led, NO mode
                 deleteRowid(controlState.dbName, rowidCurrentBtn)
                 if rowidCurrentBtn == rowidLastLED:
-                    # get LEDConfig of next LED in stack -- if any
                     resultLED = pullLastLEDConfig(controlState.dbName, controlState.LEDConfig.LED_id)
                     if resultLED == None:
                         set_LEDs(controlState.vkbDevice, [controlState.defaultLEDConfig])

@@ -1,10 +1,16 @@
-"""
+'''
 
-vkb_led_jg_plugin_lib.py
+vkb_led_jg_plugin_lib_db.py
 
-LEDClass, get_LED_configs, set_LEDs, and _LED_conf_checksum are from the pyvkb package by
-ventorvar.  Modifications are limiting RGB values to 0 to 7, open and closing the VKB device,
-and adding a dummy LED the set process to get around a read error. 
+Wesley Covalt
+
+Functions for a Joystick Gremlin plugin to control the three LEDs of a VKB Gladiator flightstick.
+
+Please see the vkb_led_jg_plugin_db.pdf for directions and credits.
+
+
+LEDClass, set_LEDs, and _LED_conf_checksum are from the pyvkb package by ventorvar.
+These have been modified to limit RGB values to 0 to 7 and open and close the VKB device. 
 
 The following is from ventorvar:
     
@@ -34,14 +40,8 @@ Colors:
     VKB uses a simple RGB color configuration for all LEDs. Non-rgb LEDs will not light if you set their primary
     color to 0 in the color config. The LEDs have a very reduced color range due to VKB using 0-7 to determine the
     brightness of R, G, and B.
-"""
 
-"""
-    The remaining functions are utilities to translate UI input or search the USB Lighting report
-"""
-
-#import gremlin
-#from gremlin.user_plugin import *
+'''
 
 import os
 import pywinusb.hid as hid
@@ -50,10 +50,6 @@ import struct
 import bitstruct as bs
 
 import sqlite3
-
-the_db = sqlite3.connect(r'C:/Users/wkwkw/Documents/Python Projects/SQLite Test/Button Event Stack.db')
-
-the_db.close()
 
 
 LED_REPORT_ID = 0x59
@@ -121,9 +117,6 @@ def _LED_conf_checksum(num_configs, buf):
     return struct.pack("<H", chk)
 
 
-### code specifc to vkb_led_jg_plugin
-
-
 class controlStateClass:
     
     def __init__(self,
@@ -170,17 +163,16 @@ def getUSBDevice(vendor_id, product_id):
 
 ### Database functions
 
-
 def createLEDStack(dbName):
     the_db = sqlite3.connect(dbName)
     the_db.execute("DROP TABLE IF EXISTS LEDStack;")
-    the_db.execute("""CREATE TABLE IF NOT EXISTS LEDStack(button_id TEXT,
+    the_db.execute('''CREATE TABLE IF NOT EXISTS LEDStack(button_id TEXT,
                                                           LED_id INT,
                                                           mode TEXT,
                                                           colorMode INT,
                                                           LEDMode INT,
                                                           color1 TEXT,
-                                                          color2 TEXT);""")
+                                                          color2 TEXT);''')
     the_db.commit()
     the_db.close()
 
@@ -198,7 +190,7 @@ def pushButtonLEDEvent(dbName, button_id, LEDConfig, mode):
     the_db.close()
 
 
-# pull the LEDConfig from a last LED
+# pull the LEDConfig for the last LED id
 def pullLastLEDConfig(dbName, LED_id):
     the_db = sqlite3.connect(dbName)
     cursor = the_db.cursor()
